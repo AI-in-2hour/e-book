@@ -196,6 +196,16 @@ section{padding:5.5rem 5%;}
 .modal-cancel{padding:0.7rem 1.4rem;background:var(--s100);color:var(--s600);border:none;border-radius:4px;font-size:0.902rem;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 .modal-submit{padding:0.7rem 1.4rem;background:var(--s800);color:white;border:none;border-radius:4px;font-size:0.902rem;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 .modal-submit:hover{background:var(--gold);}
+.img-upload-area{border:2px dashed var(--s300);border-radius:8px;padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--s50);}
+.img-upload-area:hover{border-color:var(--gold);background:rgba(201,169,110,0.04);}
+.img-upload-area.drag-over{border-color:var(--gold);background:rgba(201,169,110,0.08);}
+.img-upload-icon{font-size:1.8rem;margin-bottom:0.4rem;}
+.img-upload-text{font-size:0.858rem;color:var(--s500);}
+.img-upload-text span{color:var(--gold);font-weight:600;text-decoration:underline;cursor:pointer;}
+.img-preview-wrap{display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.8rem;}
+.img-preview-item{position:relative;width:80px;height:80px;border-radius:6px;overflow:hidden;border:1px solid var(--s200);}
+.img-preview-item img{width:100%;height:100%;object-fit:cover;}
+.img-preview-remove{position:absolute;top:2px;right:2px;width:20px;height:20px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;font-size:0.7rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
 
 /* DOWNLOAD SECTION */
 .dl-section{background:var(--s100);}
@@ -988,6 +998,15 @@ footer{background:var(--s900);color:var(--s400);text-align:center;padding:3rem 5
       <textarea id="post-body" placeholder="공유하고 싶은 AI 자료나 인사이트를 자유롭게 써주세요 😊"></textarea>
     </div>
     <div class="form-group">
+      <label>이미지 첨부 (선택)</label>
+      <input type="file" id="post-images" multiple accept="image/*" style="display:none;" onchange="handleImageSelect(event)">
+      <div class="img-upload-area" id="imgUploadArea" onclick="document.getElementById('post-images').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');handleImageDrop(event)">
+        <div class="img-upload-icon">📷</div>
+        <div class="img-upload-text">이미지를 드래그하거나 <span>클릭하여 선택</span>해주세요</div>
+      </div>
+      <div class="img-preview-wrap" id="imgPreviewWrap"></div>
+    </div>
+    <div class="form-group">
       <label>태그 (선택)</label>
       <input type="text" id="post-tag" placeholder="예: 추천 자료, 실전 팁">
     </div>
@@ -1070,8 +1089,40 @@ function expandPrompt(id, btn) {
 
 // BOARD WRITE MODAL
 let posts = [];
+let uploadedImages = [];
 function openModal() { document.getElementById('writeModal').classList.add('open'); }
 function closeModal() { document.getElementById('writeModal').classList.remove('open'); }
+
+function handleImageSelect(e) {
+  const files = Array.from(e.target.files);
+  processImageFiles(files);
+}
+function handleImageDrop(e) {
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  processImageFiles(files);
+}
+function processImageFiles(files) {
+  files.forEach(file => {
+    if (uploadedImages.length >= 5) { alert('이미지는 최대 5장까지 첨부할 수 있습니다.'); return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      uploadedImages.push(e.target.result);
+      renderImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function renderImagePreviews() {
+  const wrap = document.getElementById('imgPreviewWrap');
+  wrap.innerHTML = uploadedImages.map((src, i) =>
+    `<div class="img-preview-item"><img src="${src}" alt="첨부 이미지"><button class="img-preview-remove" onclick="event.stopPropagation();removeImage(${i})">✕</button></div>`
+  ).join('');
+}
+function removeImage(idx) {
+  uploadedImages.splice(idx, 1);
+  renderImagePreviews();
+}
+
 function submitPost() {
   const title = document.getElementById('post-title').value.trim();
   const body = document.getElementById('post-body').value.trim();
@@ -1080,14 +1131,19 @@ function submitPost() {
   if (!title || !body) { alert('제목과 내용을 입력해주세요!'); return; }
   const now = new Date();
   const date = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
-  posts.unshift({title, body, cat, tag, date});
+  const images = [...uploadedImages];
+  posts.unshift({title, body, cat, tag, date, images});
   const card = document.createElement('div');
   card.className = 'board-card';
-  card.innerHTML = `<div class="board-cat">${cat}</div><div class="board-title">${title}</div><div class="board-excerpt">${body.slice(0,100)}${body.length>100?'...':''}</div><div class="board-meta"><span class="board-tag">${tag}</span><span>${date}</span></div>`;
+  const imgHtml = images.length > 0 ? `<div style="display:flex;gap:0.4rem;margin-bottom:0.6rem;overflow-x:auto;">${images.map(s => `<img src="${s}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;flex-shrink:0;" alt="첨부">`).join('')}</div>` : '';
+  card.innerHTML = `<div class="board-cat">${cat}</div><div class="board-title">${title}</div>${imgHtml}<div class="board-excerpt">${body.slice(0,100)}${body.length>100?'...':''}</div><div class="board-meta"><span class="board-tag">${tag}</span><span>${date}</span></div>`;
   document.getElementById('board-grid').prepend(card);
   document.getElementById('post-title').value = '';
   document.getElementById('post-body').value = '';
   document.getElementById('post-tag').value = '';
+  document.getElementById('post-images').value = '';
+  uploadedImages = [];
+  document.getElementById('imgPreviewWrap').innerHTML = '';
   closeModal();
 }
 document.getElementById('writeModal').addEventListener('click', e => {
